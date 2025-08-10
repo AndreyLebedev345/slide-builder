@@ -12,9 +12,23 @@
     <div id="app">
       <aside class="sidebar">
         <h2>Slide Controls</h2>
-        <button id="add-slide-btn">Add Slide</button>
+        <button id="add-slide-btn" type="button">Add Slide</button>
         <button id="reorder-slide-btn">Reorder Slides</button>
         <div class="slide-list" id="slide-list"></div>
+        
+        <div class="chat-section">
+          <h3>AI Assistant</h3>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-container">
+            <input 
+              type="text" 
+              id="chat-input" 
+              placeholder="Ask AI to create slides..."
+              autocomplete="off"
+            />
+            <button id="send-btn" type="button">Send</button>
+          </div>
+        </div>
       </aside>
       <main class="main-content">
         <div class="reveal">

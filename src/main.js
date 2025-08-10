@@ -1,5 +1,6 @@
 import './style.css'
 import Reveal from 'reveal.js'
+import { initChat } from './chat.js'
 
 let deck = null;
 let slideCount = 1;
@@ -169,62 +170,105 @@ function updateSlideList() {
   });
 }
 
-function openEditModal(slideIndex) {
-  const slidesContainer = document.getElementById('slides-container');
-  const slides = slidesContainer.querySelectorAll('section');
-  
-  if (slideIndex < 0 || slideIndex >= slides.length) {
-    return;
-  }
-  
-  const currentContent = slides[slideIndex].innerHTML;
-  
-  // Create modal
-  const modal = document.createElement('div');
-  modal.className = 'edit-modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h3>Edit Slide ${slideIndex + 1}</h3>
-      <textarea id="slide-content-editor" rows="10">${currentContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-      <div class="modal-buttons">
-        <button id="save-slide-btn">Save</button>
-        <button id="cancel-edit-btn">Cancel</button>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(modal);
-  
-  // Focus on textarea
-  const editor = document.getElementById('slide-content-editor');
-  editor.focus();
-  editor.select();
-  
-  // Save button handler
-  document.getElementById('save-slide-btn').onclick = () => {
-    const newContent = editor.value;
-    updateSlide(slideIndex, newContent);
-    document.body.removeChild(modal);
-  };
-  
-  // Cancel button handler
-  document.getElementById('cancel-edit-btn').onclick = () => {
-    document.body.removeChild(modal);
-  };
-  
-  // Close on escape key
-  const handleEscape = (e) => {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modal);
-      document.removeEventListener('keydown', handleEscape);
+// Expose slide API globally for AI agent integration
+window.slideAPI = {
+  addSlide: (html, position) => {
+    const slidesContainer = document.getElementById('slides-container');
+    const newSlide = document.createElement('section');
+    newSlide.innerHTML = html;
+    
+    if (position !== undefined && position >= 0) {
+      const slides = slidesContainer.querySelectorAll('section');
+      if (position < slides.length) {
+        slidesContainer.insertBefore(newSlide, slides[position]);
+      } else {
+        slidesContainer.appendChild(newSlide);
+      }
+    } else {
+      slidesContainer.appendChild(newSlide);
     }
-  };
-  document.addEventListener('keydown', handleEscape);
-}
+    
+    if (deck) {
+      deck.sync();
+      deck.slide(position !== undefined ? position : deck.getTotalSlides() - 1);
+    }
+    
+    updateSlideList();
+    slideCount = document.querySelectorAll('.slides section').length;
+  },
+  
+  updateSlide: (index, html) => {
+    const slides = document.querySelectorAll('.slides section');
+    if (slides[index]) {
+      slides[index].innerHTML = html;
+      if (deck) {
+        deck.sync();
+      }
+    }
+  },
+  
+  deleteSlide: (index) => {
+    const slides = document.querySelectorAll('.slides section');
+    if (slides[index] && slides.length > 1) {
+      slides[index].remove();
+      if (deck) {
+        deck.sync();
+      }
+      updateSlideList();
+      slideCount = document.querySelectorAll('.slides section').length;
+    }
+  },
+  
+  getSlideContent: (index) => {
+    const slides = document.querySelectorAll('.slides section');
+    return slides[index] ? slides[index].innerHTML : null;
+  },
+  
+  getAllSlides: () => {
+    const slides = document.querySelectorAll('.slides section');
+    return Array.from(slides).map(s => s.innerHTML);
+  },
+  
+  getCurrentSlideIndex: () => {
+    return deck ? deck.getIndices().h : 0;
+  },
+  
+  navigateToSlide: (index) => {
+    if (deck) {
+      deck.slide(index);
+    }
+  },
+  
+  getTotalSlides: () => {
+    return document.querySelectorAll('.slides section').length;
+  },
+  
+  changeTheme: (themeName) => {
+    // List of valid themes
+    const validThemes = ['black', 'white', 'league', 'beige', 'night', 'serif', 'simple', 'solarized', 'moon', 'dracula', 'sky', 'blood'];
+    
+    if (!validThemes.includes(themeName)) {
+      console.error(`Invalid theme: ${themeName}`);
+      return false;
+    }
+    
+    // Find the theme link element
+    const themeLink = document.querySelector('link[href*="theme/"]');
+    if (themeLink) {
+      // Update the theme CSS link
+      themeLink.href = `/node_modules/reveal.js/dist/theme/${themeName}.css`;
+      return true;
+    }
+    
+    console.error('Theme link element not found');
+    return false;
+  }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
   initReveal();
   updateSlideList();
+  initChat();
   
   const addSlideBtn = document.getElementById('add-slide-btn');
   if (addSlideBtn) {

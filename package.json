@@ -12,6 +12,7 @@
     "vite": "^7.1.0"
   },
   "dependencies": {
+    "openai": "^5.12.2",
     "reveal.js": "^5.2.1"
   }
 }
