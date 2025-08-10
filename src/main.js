@@ -262,6 +262,37 @@ window.slideAPI = {
     
     console.error('Theme link element not found');
     return false;
+  },
+  
+  clearAllSlides: () => {
+    const slidesContainer = document.getElementById('slides-container');
+    // Keep at least one slide
+    slidesContainer.innerHTML = '<section><h2>Presentation Cleared</h2><p>Ready for new content</p></section>';
+    if (deck) {
+      deck.sync();
+      deck.slide(0);
+    }
+    updateSlideList();
+    slideCount = 1;
+  },
+  
+  replaceAllSlides: (slidesHtml) => {
+    const slidesContainer = document.getElementById('slides-container');
+    slidesContainer.innerHTML = '';
+    
+    // Add new slides
+    slidesHtml.forEach(html => {
+      const newSlide = document.createElement('section');
+      newSlide.innerHTML = html;
+      slidesContainer.appendChild(newSlide);
+    });
+    
+    if (deck) {
+      deck.sync();
+      deck.slide(0);
+    }
+    updateSlideList();
+    slideCount = slidesHtml.length;
   }
 };
 

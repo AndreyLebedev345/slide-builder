@@ -71,6 +71,8 @@ async function sendMessage(message) {
     // Process the response
     if (response.output) {
       let aiMessage = '';
+      let hasReadSlides = false;
+      let hasModifiedSlides = false;
       
       for (const item of response.output) {
         if (item.type === 'text' && item.text) {
@@ -83,21 +85,85 @@ async function sendMessage(message) {
           // Execute the tool call
           try {
             const args = JSON.parse(item.arguments);
+            console.log(`Executing tool: ${item.name}`, args);
+            
             const result = await executeSlideToolCall(
               window.slideAPI,
               item.name,
               args
             );
             
+            // Track what the AI did
+            if (item.name === 'get_all_slides') {
+              hasReadSlides = true;
+            } else if (['replace_all_slides', 'add_slide', 'update_slide'].includes(item.name)) {
+              hasModifiedSlides = true;
+            }
+            
             // Show tool execution result
             if (result.success) {
-              addMessageToChat(`✓ ${result.message}`, 'system');
+              // Don't show verbose messages for read operations
+              if (item.name === 'get_all_slides') {
+                console.log('Read slides:', result);
+                addMessageToChat(`📖 Read ${result.count} slides`, 'system');
+              } else if (item.name === 'get_total_slides') {
+                console.log('Total slides:', result.total);
+              } else {
+                addMessageToChat(`✓ ${result.message}`, 'system');
+              }
             } else {
               addMessageToChat(`✗ ${result.message}`, 'system');
             }
           } catch (error) {
             console.error('Error executing tool:', error);
             addMessageToChat(`Error executing tool: ${error.message}`, 'system');
+          }
+        }
+      }
+      
+      // Check if AI only read slides without modifying
+      if (hasReadSlides && !hasModifiedSlides) {
+        const userMessage = messageHistory[messageHistory.length - 1]?.content || message;
+        const isReducing = /reduce|condense|make it \d+|shorten|\d+ slides/i.test(userMessage);
+        const isCreating = /create|make.*presentation|build/i.test(userMessage);
+        
+        if (isReducing || isCreating) {
+          console.warn('AI read slides but did not modify. Forcing completion...');
+          addMessageToChat('⚠️ Completing the task...', 'system');
+          
+          // Extract number of slides if specified
+          const slideMatch = userMessage.match(/(\d+)\s*slides?/i);
+          const targetSlides = slideMatch ? parseInt(slideMatch[1]) : 3;
+          
+          // Force the AI to complete with a very explicit message
+          const forceMessage = isReducing 
+            ? `You MUST use replace_all_slides RIGHT NOW with exactly ${targetSlides} slides. Example: replace_all_slides(["<h1>Title</h1>", "<h2>Main Points</h2>", "<h2>Conclusion</h2>"])`
+            : `You MUST use replace_all_slides RIGHT NOW with the new presentation slides.`;
+          
+          messageHistory.push({
+            role: 'system',
+            content: forceMessage
+          });
+          
+          // Retry immediately
+          const retryResponse = await callAIAgent(messageHistory);
+          
+          // Process retry response
+          if (retryResponse.output) {
+            for (const item of retryResponse.output) {
+              if (item.type === 'tool_call') {
+                try {
+                  const args = JSON.parse(item.arguments);
+                  console.log(`Retry - Executing tool: ${item.name}`, args);
+                  const result = await executeSlideToolCall(window.slideAPI, item.name, args);
+                  if (result.success) {
+                    addMessageToChat(`✓ ${result.message}`, 'system');
+                  }
+                } catch (error) {
+                  console.error('Retry error:', error);
+                }
+              }
+            }
           }
         }
       }
@@ -158,40 +224,35 @@ async function callAIAgent(messages) {
   // System message with instructions
   const systemMessage = {
     role: 'system',
-    content: `You are a presentation slide builder assistant. You can create slides and customize the presentation appearance.
+    content: `You are a presentation slide builder. You MUST complete every task.
+
+    MANDATORY WORKFLOW - YOU MUST DO BOTH STEPS:
+    1. FIRST: Call get_all_slides()
+    2. SECOND: Call replace_all_slides(array_of_slides)
     
-    Available tools:
-    - add_slide: Create new slides with HTML content
-    - change_theme: Switch between 12 different presentation themes
+    YOU ONLY HAVE THESE TOOLS:
+    - get_all_slides: Read slides (step 1)
+    - replace_all_slides: Replace with new slides (step 2)
     
-    Available themes:
-    - black (default): Black background, white text, blue links
-    - white: Clean white background, black text
-    - league: Gray background, white text
-    - beige: Warm beige background, dark text
-    - night: Black background with orange accents
-    - serif: Traditional cappuccino background
-    - simple: Minimal white background
-    - solarized: Cream colored with dark green text
-    - moon: Dark blue background, grey text
-    - dracula: Dracula color scheme
-    - sky: Blue background, thin dark text
-    - blood: Dark background with red links
+    NEVER STOP AFTER STEP 1. ALWAYS DO STEP 2.
     
-    Keep responses concise. When creating slides:
-    - Use proper HTML formatting
-    - Keep content concise and readable
-    - One main idea per slide
-    - Use appropriate heading levels (h1 for titles, h2 for slide headers)`
+    For "reduce to 3 slides" or "make it 3 slides":
+    Call: replace_all_slides(["<h1>Combined Title</h1>", "<h2>All Main Points</h2><ul><li>...</li></ul>", "<h2>Conclusion</h2>"])
+    
+    For "create presentation on X":
+    Call: replace_all_slides(["<h1>Title about X</h1>", "<h2>Point 1</h2>", "<h2>Point 2</h2>", ...])
+    
+    YOU MUST ALWAYS CALL replace_all_slides AFTER get_all_slides.
+    NEVER EXPLAIN WITHOUT DOING. ALWAYS COMPLETE THE TASK.`
   };
   
   // Create the API request
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini', // Using smaller model for faster responses
+    model: 'gpt-4o', // Using more capable model for better instruction following
     messages: [systemMessage, ...messages],
     tools: tools,
     tool_choice: 'auto',
-    temperature: 0.7
+    temperature: 0.3 // Lower temperature for more deterministic behavior
   });
   
   // Format the response

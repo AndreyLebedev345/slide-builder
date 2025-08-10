@@ -10,19 +10,148 @@
  */
 export function getSlideBuilderTools() {
   return [
+    getAllSlidesTool(),
+    getTotalSlidesTool(),
+    replaceAllSlidesTool(),
+    clearAllSlidesTool(),
+    updateSlideTool(),
+    deleteSlideTool(),
     addSlideTool(),
     changeThemeTool(),
-    // Future tools will be added here:
-    // updateSlideTool(),
-    // deleteSlideTool(),
-    // getSlideContentTool(),
-    // reorderSlideTool(),
-    // getCurrentSlideIndexTool(),
-    // navigateToSlideTool(),
-    // getAllSlidesTool(),
-    // clearAllSlidesTool(),
-    // duplicateSlideTool(),
   ];
+}
+
+/**
+ * Tool: Get all slides content
+ */
+function getAllSlidesTool() {
+  return {
+    type: 'function',
+    function: {
+      name: 'get_all_slides',
+      description: 'Get the HTML content of all slides. ALWAYS use this first to understand the current presentation before making changes.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  };
+}
+
+/**
+ * Tool: Get total slides count
+ */
+function getTotalSlidesTool() {
+  return {
+    type: 'function',
+    function: {
+      name: 'get_total_slides',
+      description: 'Get the total number of slides in the presentation.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  };
+}
+
+/**
+ * Tool: Replace all slides
+ */
+function replaceAllSlidesTool() {
+  return {
+    type: 'function',
+    function: {
+      name: 'replace_all_slides',
+      description: 'Replace the entire presentation with new slides. Use this when you need to completely restructure or condense a presentation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slides: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            description: 'Array of HTML content for each slide'
+          }
+        },
+        required: ['slides'],
+        additionalProperties: false
+      }
+    }
+  };
+}
+
+/**
+ * Tool: Clear all slides
+ */
+function clearAllSlidesTool() {
+  return {
+    type: 'function',
+    function: {
+      name: 'clear_all_slides',
+      description: 'Remove all slides from the presentation. Use before creating a new presentation from scratch.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  };
+}
+
+/**
+ * Tool: Update a slide
+ */
+function updateSlideTool() {
+  return {
+    type: 'function',
+    function: {
+      name: 'update_slide',
+      description: 'Update the content of a specific slide by index.',
+      parameters: {
+        type: 'object',
+        properties: {
+          index: {
+            type: 'number',
+            description: 'The index of the slide to update (0-based)'
+          },
+          content: {
+            type: 'string',
+            description: 'New HTML content for the slide'
+          }
+        },
+        required: ['index', 'content'],
+        additionalProperties: false
+      }
+    }
+  };
+}
+
+/**
+ * Tool: Delete a slide
+ */
+function deleteSlideTool() {
+  return {
+    type: 'function',
+    function: {
+      name: 'delete_slide',
+      description: 'Delete a specific slide by index.',
+      parameters: {
+        type: 'object',
+        properties: {
+          index: {
+            type: 'number',
+            description: 'The index of the slide to delete (0-based)'
+          }
+        },
+        required: ['index'],
+        additionalProperties: false
+      }
+    }
+  };
 }
 
 /**
@@ -117,6 +246,74 @@ export async function executeSlideToolCall(slideAPI, toolName, args) {
           message: 'Slide API not available. Make sure the presentation is loaded.'
         };
       }
+
+    case 'get_all_slides':
+      if (window.slideAPI && window.slideAPI.getAllSlides) {
+        const slides = window.slideAPI.getAllSlides();
+        return {
+          success: true,
+          slides: slides,
+          count: slides.length
+        };
+      }
+      return { success: false, message: 'Get slides API not available.' };
+
+    case 'get_total_slides':
+      if (window.slideAPI && window.slideAPI.getTotalSlides) {
+        const total = window.slideAPI.getTotalSlides();
+        return {
+          success: true,
+          total: total
+        };
+      }
+      return { success: false, message: 'Get total slides API not available.' };
+
+    case 'replace_all_slides':
+      if (window.slideAPI && window.slideAPI.replaceAllSlides) {
+        window.slideAPI.replaceAllSlides(args.slides);
+        return {
+          success: true,
+          message: `Replaced presentation with ${args.slides.length} slides`
+        };
+      }
+      return { success: false, message: 'Replace slides API not available.' };
+
+    case 'clear_all_slides':
+      if (window.slideAPI && window.slideAPI.clearAllSlides) {
+        window.slideAPI.clearAllSlides();
+        return {
+          success: true,
+          message: 'All slides cleared'
+        };
+      }
+      return { success: false, message: 'Clear slides API not available.' };
+
+    case 'update_slide':
+      if (window.slideAPI && window.slideAPI.updateSlide) {
+        window.slideAPI.updateSlide(args.index, args.content);
+        return {
+          success: true,
+          message: `Slide ${args.index} updated`
+        };
+      }
+      return { success: false, message: 'Update slide API not available.' };
+
+    case 'delete_slide':
+      if (window.slideAPI && window.slideAPI.deleteSlide) {
+        const totalSlides = window.slideAPI.getTotalSlides();
+        if (args.index >= 0 && args.index < totalSlides) {
+          window.slideAPI.deleteSlide(args.index);
+          return {
+            success: true,
+            message: `Slide ${args.index} deleted`
+          };
+        }
+        return {
+          success: false,
+          message: `Invalid slide index: ${args.index}`
+        };
+      }
+      return { success: false, message: 'Delete slide API not available.' };
 
     case 'change_theme':
       // Call the slideAPI to change theme
