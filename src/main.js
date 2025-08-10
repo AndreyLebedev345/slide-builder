@@ -42,6 +42,40 @@ function addSlide() {
   updateSlideList();
 }
 
+function reorderSlide(fromIndex, toIndex) {
+  const slidesContainer = document.getElementById('slides-container');
+  const slides = slidesContainer.querySelectorAll('section');
+
+  if (
+    fromIndex < 0 || fromIndex >= slides.length ||
+    toIndex < 0 || toIndex >= slides.length
+  ) {
+    console.error('Invalid indices for reorderSlide');
+    return;
+  }
+
+  const slideToMove = slides[fromIndex];
+
+  // Remove the slide from its current position
+  slidesContainer.removeChild(slideToMove);
+
+  // Insert before the target index (if moving forward, adjust target)
+  if (toIndex >= slides.length) {
+    slidesContainer.appendChild(slideToMove);
+  } else {
+    slidesContainer.insertBefore(slideToMove, slides[toIndex]);
+  }
+
+  // Refresh Reveal.js so it knows about the new order
+  if (deck) {
+    deck.sync();
+    deck.slide(toIndex);
+  }
+
+  // Update the clickable slide list
+  updateSlideList();
+}
+
 function updateSlideList() {
   const slideList = document.getElementById('slide-list');
   const slides = document.querySelectorAll('.slides section');
@@ -67,5 +101,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const addSlideBtn = document.getElementById('add-slide-btn');
   if (addSlideBtn) {
     addSlideBtn.addEventListener('click', addSlide);
+  }
+
+  const reorderSlideBtn = document.getElementById('reorder-slide-btn');
+  if (reorderSlideBtn) {
+    reorderSlideBtn.addEventListener('click', () => {
+      const from = parseInt(prompt("Enter the current slide number to move:"), 10) - 1;
+      const to = parseInt(prompt("Enter the new position for the slide:"), 10) - 1;
+
+      if (isNaN(from) || isNaN(to)) {
+        alert("Invalid input. Please enter valid numbers.");
+        return;
+      }
+
+      reorderSlide(from, to);
+    });
   }
 });
