@@ -469,7 +469,9 @@ ${code}
   
   image: (title: string, imageSrc: string, caption = '') => `
     <h2>${title}</h2>
-    <img src="${imageSrc}" alt="${caption || title}" style="max-width: 80%;">
+    <div style="display: flex; justify-content: center; align-items: center; margin-top: 20px;">
+      <img src="${imageSrc}" alt="${caption || title}" style="max-width: 56%; height: auto; display: block;">
+    </div>
     ${caption ? `<p><small>${caption}</small></p>` : ''}
   `
 };
