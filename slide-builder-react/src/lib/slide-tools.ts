@@ -32,6 +32,7 @@ export function getSlideBuilderTools(): ToolFunction[] {
     deleteSlideTool(),
     addSlideTool(),
     changeThemeTool(),
+    generateImageTool(),
   ];
 }
 
@@ -230,6 +231,48 @@ function changeThemeTool(): ToolFunction {
   };
 }
 
+/**
+ * Tool: Generate image using DALL-E 3
+ */
+function generateImageTool(): ToolFunction {
+  return {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: 'Generate an image using DALL-E 3 AI model and add it to a slide. The image will be created based on your text description.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: 'A detailed text description of the image you want to generate. Be specific about style, colors, composition, and any text that should appear in the image.'
+          },
+          slideTitle: {
+            type: 'string',
+            description: 'Title for the slide containing the generated image'
+          },
+          size: {
+            type: 'string',
+            enum: ['1024x1024', '1024x1792', '1792x1024'],
+            description: 'Size of the generated image. Default is 1024x1024 (square), 1024x1792 (portrait), or 1792x1024 (landscape)'
+          },
+          quality: {
+            type: 'string',
+            enum: ['standard', 'hd'],
+            description: 'Quality of the generated image. HD takes longer but produces better results. Default is standard.'
+          },
+          position: {
+            type: 'number',
+            description: 'Optional index where to insert the slide with the image (0-based). If not provided, adds to the end.'
+          }
+        },
+        required: ['prompt', 'slideTitle'],
+        additionalProperties: false
+      }
+    }
+  };
+}
+
 export interface SlideAPI {
   addSlide: (html: string, position?: number) => void;
   updateSlide: (index: number, html: string) => void;
@@ -242,6 +285,7 @@ export interface SlideAPI {
   changeTheme: (themeName: string) => boolean;
   replaceAllSlides?: (slides: string[]) => void;
   clearAllSlides?: () => void;
+  generateImage?: (prompt: string, size?: string, quality?: string) => Promise<string>;
 }
 
 /**
@@ -342,6 +386,45 @@ export async function executeSlideToolCall(
           message: `Failed to change theme to: ${args.theme}`
         };
       }
+
+    case 'generate_image':
+      if (slideAPI.generateImage) {
+        try {
+          console.log('[executeSlideToolCall] Starting image generation with prompt:', args.prompt);
+          
+          // Generate the image
+          const imageUrl = await slideAPI.generateImage(
+            args.prompt,
+            args.size || '1024x1024',
+            args.quality || 'standard'
+          );
+          
+          console.log('[executeSlideToolCall] Image generated successfully:', imageUrl);
+          
+          // Create a slide with the generated image
+          const slideHTML = SLIDE_TEMPLATES.image(
+            args.slideTitle,
+            imageUrl,
+            ''
+          );
+          
+          // Add the slide
+          slideAPI.addSlide(slideHTML, args.position);
+          
+          return {
+            success: true,
+            message: `Generated image and added to slide`,
+            imageUrl: imageUrl
+          };
+        } catch (error) {
+          console.error('[executeSlideToolCall] Image generation failed:', error);
+          return {
+            success: false,
+            message: `Failed to generate image: ${error instanceof Error ? error.message : 'Unknown error'}`
+          };
+        }
+      }
+      return { success: false, message: 'Image generation API not available.' };
 
     default:
       throw new Error(`Unknown tool: ${toolName}`);

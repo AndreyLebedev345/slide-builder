@@ -22,6 +22,43 @@ function App() {
   
   const presentationRef = useRef<SlidePresentationRef>(null);
 
+  // DALL-E 3 image generation function
+  const generateImage = async (prompt: string, size: string = '1024x1024', quality: string = 'standard'): Promise<string> => {
+    console.log('[App.generateImage] Starting image generation with prompt:', prompt);
+    const apiKey = localStorage.getItem('openai_api_key');
+    if (!apiKey) {
+      console.error('[App.generateImage] No API key found');
+      throw new Error('OpenAI API key not found. Please set it in the chat interface.');
+    }
+
+    console.log('[App.generateImage] Calling DALL-E 3 API...');
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: size,
+        quality: quality,
+        response_format: 'url'
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('[App.generateImage] API error:', error);
+      throw new Error(error.error?.message || 'Failed to generate image');
+    }
+
+    const data = await response.json();
+    console.log('[App.generateImage] Image generated successfully:', data.data[0].url);
+    return data.data[0].url;
+  };
+
   // Create slideAPI object for chat interface
   const slideAPI: SlideAPI = {
     addSlide: (html: string, position?: number) => {
@@ -129,7 +166,8 @@ function App() {
           presentationRef.current.sync();
         }
       }, 0);
-    }
+    },
+    generateImage: generateImage
   };
 
   const handleAddSlide = () => {

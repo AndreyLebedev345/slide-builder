@@ -141,7 +141,7 @@ Available themes: black (default), white, league, beige, night, serif, simple, s
         
         // Make request to OpenAI Responses API
         const response = await (openai as any).responses.create({
-          model: 'gpt-5',
+          model: 'gpt-4.1',
           instructions: DEVELOPER_INSTRUCTIONS,
           input: conversationMessages,
           tools: tools.map(t => ({
