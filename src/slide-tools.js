@@ -220,8 +220,13 @@ function changeThemeTool() {
  * Execute a tool function call on the slide builder
  */
 export async function executeSlideToolCall(slideAPI, toolName, args) {
+  // Log the action being taken
+  console.log(`🎯 AI Agent Action: ${toolName}`, args);
+  
   switch (toolName) {
     case 'add_slide':
+      console.log(`📝 Adding new slide (type: ${args.slideType || 'custom'}) at position: ${args.position !== undefined ? args.position : 'end'}`);
+      
       // Build the slide HTML
       let slideHTML = args.content;
       
@@ -235,12 +240,14 @@ export async function executeSlideToolCall(slideAPI, toolName, args) {
         window.slideAPI.addSlide(slideHTML, args.position);
         
         const position = args.position !== undefined ? args.position : 'end';
+        console.log(`✅ Slide added successfully at position: ${position}`);
         return {
           success: true,
           message: `Slide added at position: ${position}`,
           slideType: args.slideType || 'custom'
         };
       } else {
+        console.error(`❌ Failed to add slide: Slide API not available`);
         return {
           success: false,
           message: 'Slide API not available. Make sure the presentation is loaded.'
@@ -248,89 +255,112 @@ export async function executeSlideToolCall(slideAPI, toolName, args) {
       }
 
     case 'get_all_slides':
+      console.log(`📋 Retrieving all slides from presentation`);
       if (window.slideAPI && window.slideAPI.getAllSlides) {
         const slides = window.slideAPI.getAllSlides();
+        console.log(`✅ Retrieved ${slides.length} slides successfully`);
         return {
           success: true,
           slides: slides,
           count: slides.length
         };
       }
+      console.error(`❌ Failed to get slides: API not available`);
       return { success: false, message: 'Get slides API not available.' };
 
     case 'get_total_slides':
+      console.log(`🔢 Counting total slides in presentation`);
       if (window.slideAPI && window.slideAPI.getTotalSlides) {
         const total = window.slideAPI.getTotalSlides();
+        console.log(`✅ Total slides count: ${total}`);
         return {
           success: true,
           total: total
         };
       }
+      console.error(`❌ Failed to get total slides: API not available`);
       return { success: false, message: 'Get total slides API not available.' };
 
     case 'replace_all_slides':
+      console.log(`🔄 Replacing entire presentation with ${args.slides.length} new slides`);
       if (window.slideAPI && window.slideAPI.replaceAllSlides) {
         window.slideAPI.replaceAllSlides(args.slides);
+        console.log(`✅ Presentation replaced successfully with ${args.slides.length} slides`);
         return {
           success: true,
           message: `Replaced presentation with ${args.slides.length} slides`
         };
       }
+      console.error(`❌ Failed to replace slides: API not available`);
       return { success: false, message: 'Replace slides API not available.' };
 
     case 'clear_all_slides':
+      console.log(`🗑️ Clearing all slides from presentation`);
       if (window.slideAPI && window.slideAPI.clearAllSlides) {
         window.slideAPI.clearAllSlides();
+        console.log(`✅ All slides cleared successfully`);
         return {
           success: true,
           message: 'All slides cleared'
         };
       }
+      console.error(`❌ Failed to clear slides: API not available`);
       return { success: false, message: 'Clear slides API not available.' };
 
     case 'update_slide':
+      console.log(`✏️ Updating slide at index ${args.index}`);
       if (window.slideAPI && window.slideAPI.updateSlide) {
         window.slideAPI.updateSlide(args.index, args.content);
+        console.log(`✅ Slide ${args.index} updated successfully`);
         return {
           success: true,
           message: `Slide ${args.index} updated`
         };
       }
+      console.error(`❌ Failed to update slide: API not available`);
       return { success: false, message: 'Update slide API not available.' };
 
     case 'delete_slide':
+      console.log(`🗑️ Deleting slide at index ${args.index}`);
       if (window.slideAPI && window.slideAPI.deleteSlide) {
         const totalSlides = window.slideAPI.getTotalSlides();
         if (args.index >= 0 && args.index < totalSlides) {
           window.slideAPI.deleteSlide(args.index);
+          console.log(`✅ Slide ${args.index} deleted successfully`);
           return {
             success: true,
             message: `Slide ${args.index} deleted`
           };
         }
+        console.error(`❌ Invalid slide index: ${args.index} (total slides: ${totalSlides})`);
         return {
           success: false,
           message: `Invalid slide index: ${args.index}`
         };
       }
+      console.error(`❌ Failed to delete slide: API not available`);
       return { success: false, message: 'Delete slide API not available.' };
 
     case 'change_theme':
+      console.log(`🎨 Changing presentation theme to: ${args.theme}`);
       // Call the slideAPI to change theme
       if (window.slideAPI && window.slideAPI.changeTheme) {
         const result = window.slideAPI.changeTheme(args.theme);
         if (result) {
+          console.log(`✅ Theme changed successfully to: ${args.theme}`);
           return {
             success: true,
             message: `Theme changed to: ${args.theme}`
           };
         } else {
+          console.error(`❌ Failed to change theme to: ${args.theme}`);
           return {
             success: false,
             message: `Failed to change theme to: ${args.theme}`
           };
         }
       } else {
+        console.error(`❌ Failed to change theme: API not available`);
         return {
           success: false,
           message: 'Theme change API not available.'
@@ -344,6 +374,7 @@ export async function executeSlideToolCall(slideAPI, toolName, args) {
     //   ...
     
     default:
+      console.error(`❌ Unknown tool called: ${toolName}`);
       throw new Error(`Unknown tool: ${toolName}`);
   }
 }
