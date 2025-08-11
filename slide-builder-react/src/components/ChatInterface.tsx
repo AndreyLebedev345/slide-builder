@@ -88,8 +88,16 @@ You are a presentation slide builder assistant with access to tools for creating
 - Total slides: ${slideAPI.getTotalSlides()}
 - Currently viewing: Slide ${slideAPI.getCurrentSlideIndex() + 1} (index: ${slideAPI.getCurrentSlideIndex()})
 
-## PERSISTENCE
-You are an agent - please keep going until the user's query is completely resolved. Only terminate your turn when you are sure that the task is complete.
+## PERSISTENCE AND ITERATIVE TOOL USE
+You are an agent - please keep going until the user's query is completely resolved. You can:
+1. Call tools to inspect the current state (e.g., get_all_slides)
+2. Based on the results, decide what actions to take
+3. Call more tools to modify slides as needed
+4. Continue iterating until the task is complete
+
+For example:
+- If asked to "improve the current slide", first use get_all_slides to see it, then update_slide with improvements
+- If asked to "add slides about X", you might first check existing slides, then add new ones that complement them
 
 ## TOOL CALLING
 - ALWAYS use get_all_slides first to understand the current presentation before making changes
@@ -120,73 +128,139 @@ Available themes: black (default), white, league, beige, night, serif, simple, s
 - Use appropriate heading levels (h1 for titles, h2 for slide headers)
 - Use inline styles for layout when needed`;
 
-      console.log('[ChatInterface] Making request to OpenAI Responses API');
+      console.log('[ChatInterface] Starting iterative tool execution');
       
-      // Make request to OpenAI Responses API
-      const response = await (openai as any).responses.create({
-        model: 'gpt-4.1',
-        instructions: DEVELOPER_INSTRUCTIONS,
-        input: inputMessages,
-        tools: tools.map(t => ({
-          type: t.type,
-          name: t.function.name,
-          description: t.function.description,
-          parameters: t.function.parameters
-        })),
-        tool_choice: 'auto',
-      });
-
-      console.log('[ChatInterface] Response:', response);
-
-      // Process the output array
-      const output = response.output || [];
-      const outputText = response.output_text || '';
+      // Keep track of all tool results for context
+      const conversationMessages = [...inputMessages];
+      const maxIterations = 10; // Prevent infinite loops
+      let currentIteration = 0;
       
-      // Process each output item
-      for (const item of output) {
-        console.log('[ChatInterface] Processing output item:', item);
+      while (currentIteration < maxIterations) {
+        currentIteration++;
+        console.log(`[ChatInterface] Iteration ${currentIteration}`);
         
-        if (item.type === 'text' && item.content) {
-          // Assistant's text response
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: item.content 
-          }]);
-        } else if (item.type === 'function_call' || item.type === 'custom_tool_call') {
-          // Tool call
-          try {
-            const toolName = item.name || item.function?.name;
-            const toolArgs = item.arguments ? JSON.parse(item.arguments) : 
-                           item.input ? JSON.parse(item.input) : {};
-            
-            console.log('[ChatInterface] Executing tool:', toolName, toolArgs);
-            
-            const result = await executeSlideToolCall(
-              slideAPI,
-              toolName,
-              toolArgs
-            );
-            
-            // Show tool result in UI
-            setMessages(prev => [...prev, {
-              role: 'system',
-              content: result.success ? `✓ ${result.message}` : `✗ ${result.message}`
+        // Make request to OpenAI Responses API
+        const response = await (openai as any).responses.create({
+          model: 'gpt-4.1',
+          instructions: DEVELOPER_INSTRUCTIONS,
+          input: conversationMessages,
+          tools: tools.map(t => ({
+            type: t.type,
+            name: t.function.name,
+            description: t.function.description,
+            parameters: t.function.parameters
+          })),
+          tool_choice: 'auto',
+        });
+
+        console.log('[ChatInterface] Response:', response);
+
+        // Process the output array
+        const output = response.output || [];
+        const outputText = response.output_text || '';
+        
+        let hasToolCalls = false;
+        const toolCallsWithResults: any[] = [];
+        
+        // Process each output item
+        for (const item of output) {
+          console.log('[ChatInterface] Processing output item:', item);
+          
+          if (item.type === 'text' && item.content) {
+            // Assistant's text response
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: item.content 
             }]);
-          } catch (error) {
-            console.error('Error executing tool:', error);
-            setMessages(prev => [...prev, {
-              role: 'system',
-              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }]);
+            // Add to conversation for next iteration
+            conversationMessages.push({
+              role: 'assistant',
+              content: item.content
+            });
+          } else if (item.type === 'function_call' || item.type === 'custom_tool_call' || item.type === 'tool_call') {
+            hasToolCalls = true;
+            // Tool call
+            try {
+              const toolName = item.name || item.function?.name;
+              const toolArgs = item.arguments ? JSON.parse(item.arguments) : 
+                             item.input ? JSON.parse(item.input) : {};
+              
+              console.log('[ChatInterface] Executing tool:', toolName, toolArgs);
+              
+              const result = await executeSlideToolCall(
+                slideAPI,
+                toolName,
+                toolArgs
+              );
+              
+              // Store the tool call and its result
+              toolCallsWithResults.push({
+                name: toolName,
+                args: toolArgs,
+                result: result
+              });
+              
+              // Show tool result in UI
+              setMessages(prev => [...prev, {
+                role: 'system',
+                content: result.success ? `✓ ${result.message}` : `✗ ${result.message}`
+              }]);
+            } catch (error) {
+              console.error('Error executing tool:', error);
+              const errorResult = {
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error'
+              };
+              
+              toolCallsWithResults.push({
+                name: item.name || item.function?.name,
+                args: item.arguments || item.input || {},
+                result: errorResult
+              });
+              
+              setMessages(prev => [...prev, {
+                role: 'system',
+                content: `Error: ${errorResult.message}`
+              }]);
+            }
           }
         }
+        
+        // If we had tool calls, add them and their results to the conversation
+        if (hasToolCalls && toolCallsWithResults.length > 0) {
+          // Add a system message with tool results for the next iteration
+          const toolResultsMessage = `Tool execution results:\n${toolCallsWithResults.map(t => 
+            `- ${t.name}: ${JSON.stringify(t.result)}`
+          ).join('\n')}`;
+          
+          conversationMessages.push({
+            role: 'system',
+            content: toolResultsMessage
+          });
+          
+          console.log(`[ChatInterface] Added ${toolCallsWithResults.length} tool results to conversation`);
+        }
+        
+        // If there's final output text and no more tool calls, we're done
+        if (!hasToolCalls) {
+          if (outputText && !output.some((item: any) => item.type === 'text')) {
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: outputText 
+            }]);
+          }
+          break; // Exit the loop - task is complete
+        }
+        
+        // Continue to next iteration with tool results
+        console.log(`[ChatInterface] Continuing to next iteration with tool results in conversation`);
       }
       
-      // If there's final output text, show it
-      if (outputText && !output.some((item: any) => item.type === 'text')) {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: outputText 
+      if (currentIteration >= maxIterations) {
+        console.warn('[ChatInterface] Reached maximum iterations limit');
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: 'Maximum iterations reached. Task may be incomplete.'
         }]);
       }
 

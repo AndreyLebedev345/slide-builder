@@ -134,13 +134,13 @@ const SlidePresentation = forwardRef<SlidePresentationRef, SlidePresentationProp
         <div ref={containerRef} className="reveal h-full w-full">
           <div ref={slidesContainerRef} className="slides">
             {slides.length === 0 ? (
-              <section>
+              <section style={{ padding: '32px' }}>
                 <h1>Welcome to Slide Builder</h1>
                 <p>Use the AI Assistant to create or edit slides</p>
               </section>
             ) : (
               slides.map((slide, index) => (
-                <section key={index} dangerouslySetInnerHTML={{ __html: slide }} />
+                <section key={index} style={{ padding: '32px' }} dangerouslySetInnerHTML={{ __html: slide }} />
               ))
             )}
           </div>
